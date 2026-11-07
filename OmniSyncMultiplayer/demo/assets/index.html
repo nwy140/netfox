@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Omni Sync - Live Web Demo</title>
+    <!-- Cross-Origin Isolation for SharedArrayBuffer support in Godot 4 -->
+    <script src="coi-serviceworker.min.js"></script>
+    <style>
+        :root {
+            --bg-color: #0b0b0d;
+            --accent-white: #ffffff;
+            --text-dim: #8e8e93;
+            --bar-track: #1c1c1f;
+            --border-subtle: rgba(255, 255, 255, 0.1);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        html, body {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background: var(--bg-color);
+            background: radial-gradient(circle at center 40%, #16161a 0%, #09090b 100%);
+            color: var(--accent-white);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #canvas-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+            outline: none;
+            cursor: default;
+        }
+
+        /* Custom Loading Overlay */
+        #loading-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle at center, #151518 0%, #070709 100%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 100;
+            transition: opacity 0.6s cubic-bezier(0.16, 1, 0.3, 1), visibility 0.6s;
+        }
+
+        #loading-overlay.hidden {
+            opacity: 0;
+            visibility: hidden;
+            pointer-events: none;
+        }
+
+        .splash-wrapper {
+            max-width: 460px;
+            width: 85%;
+            margin-bottom: 2rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            animation: pulse-glow 3s ease-in-out infinite alternate;
+        }
+
+        .splash-wrapper img {
+            width: 100%;
+            height: auto;
+            border-radius: 16px;
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.7), 0 0 40px rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--border-subtle);
+        }
+
+        .loader-box {
+            width: 320px;
+            max-width: 85%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .progress-track {
+            width: 100%;
+            height: 6px;
+            background: var(--bar-track);
+            border-radius: 999px;
+            overflow: hidden;
+            position: relative;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.5);
+        }
+
+        .progress-bar {
+            height: 100%;
+            width: 0%;
+            background: linear-gradient(90deg, #888888 0%, #ffffff 100%);
+            border-radius: 999px;
+            transition: width 0.2s ease-out;
+            box-shadow: 0 0 12px rgba(255, 255, 255, 0.6);
+        }
+
+        .status-row {
+            width: 100%;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 13px;
+            letter-spacing: 0.5px;
+        }
+
+        #status-text {
+            color: var(--text-dim);
+            font-weight: 500;
+        }
+
+        #status-percent {
+            color: var(--accent-white);
+            font-weight: 600;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .spinner {
+            width: 24px;
+            height: 24px;
+            border: 2px solid rgba(255, 255, 255, 0.1);
+            border-top: 2px solid #ffffff;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin-top: 10px;
+        }
+
+        /* Error Notice */
+        #error-dialog {
+            display: none;
+            background: rgba(20, 20, 24, 0.95);
+            border: 1px solid rgba(255, 80, 80, 0.3);
+            border-radius: 12px;
+            padding: 24px;
+            max-width: 480px;
+            width: 90%;
+            text-align: center;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.8);
+            z-index: 200;
+        }
+
+        #error-dialog h3 {
+            color: #ff6b6b;
+            font-size: 18px;
+            margin-bottom: 8px;
+        }
+
+        #error-dialog p {
+            color: #c7c7cc;
+            font-size: 14px;
+            line-height: 1.5;
+            margin-bottom: 16px;
+        }
+
+        #error-dialog button {
+            background: #ffffff;
+            color: #000000;
+            border: none;
+            padding: 8px 18px;
+            border-radius: 6px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        /* Controls */
+        .controls-overlay {
+            position: absolute;
+            bottom: 16px;
+            right: 16px;
+            display: flex;
+            gap: 8px;
+            z-index: 50;
+        }
+
+        .control-btn {
+            background: rgba(20, 20, 24, 0.7);
+            border: 1px solid var(--border-subtle);
+            color: var(--accent-white);
+            padding: 8px 14px;
+            border-radius: 8px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            backdrop-filter: blur(8px);
+            transition: all 0.2s ease;
+        }
+
+        .control-btn:hover {
+            background: rgba(255, 255, 255, 0.15);
+            border-color: rgba(255, 255, 255, 0.3);
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        @keyframes pulse-glow {
+            0% {
+                filter: drop-shadow(0 0 10px rgba(255, 255, 255, 0.05));
+                transform: scale(0.995);
+            }
+            100% {
+                filter: drop-shadow(0 0 25px rgba(255, 255, 255, 0.15));
+                transform: scale(1.005);
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="canvas-container">
+        <canvas id="canvas" oncontextmenu="event.preventDefault();" tabindex="0"></canvas>
+    </div>
+
+    <!-- Custom Splash / Loading Screen -->
+    <div id="loading-overlay">
+        <div class="splash-wrapper">
+            <img src="splash.png" alt="Omni Sync - Multiplayer Addon">
+        </div>
+        <div class="loader-box">
+            <div class="progress-track">
+                <div id="progress-bar" class="progress-bar"></div>
+            </div>
+            <div class="status-row">
+                <span id="status-text">Initializing Omni Sync...</span>
+                <span id="status-percent">0%</span>
+            </div>
+            <div id="spinner" class="spinner"></div>
+        </div>
+    </div>
+
+    <!-- Error Dialog -->
+    <div id="error-dialog">
+        <h3>Web Demo Initialization Error</h3>
+        <p id="error-message">Unable to start WebAssembly instance.</p>
+        <button onclick="location.reload();">Retry</button>
+    </div>
+
+    <!-- Live Demo Toolbar -->
+    <div class="controls-overlay">
+        <button class="control-btn" id="btn-fullscreen" onclick="toggleFullscreen();">⛶ Fullscreen</button>
+    </div>
+
+    <!-- Godot Engine Loader Integration -->
+    <script src="index.js"></script>
+    <script>
+        const canvas = document.getElementById("canvas");
+        const overlay = document.getElementById("loading-overlay");
+        const progressBar = document.getElementById("progress-bar");
+        const statusText = document.getElementById("status-text");
+        const statusPercent = document.getElementById("status-percent");
+        const spinner = document.getElementById("spinner");
+        const errorDialog = document.getElementById("error-dialog");
+        const errorMessage = document.getElementById("error-message");
+
+        function showError(msg) {
+            overlay.classList.add("hidden");
+            errorDialog.style.display = "block";
+            errorMessage.textContent = msg;
+        }
+
+        function toggleFullscreen() {
+            if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen().catch(() => {});
+            } else {
+                if (document.exitFullscreen) {
+                    document.exitFullscreen();
+                }
+            }
+        }
+
+        // Initialize Godot Engine when index.js loads
+        if (typeof Engine === "undefined") {
+            statusText.textContent = "Awaiting Web Export files...";
+            statusPercent.textContent = "--";
+            console.warn("Godot engine script 'index.js' not loaded yet. Export your project for Web (HTML5) into this folder!");
+        } else {
+            const GODOT_CONFIG = {
+                args: [],
+                canvas: canvas,
+                canvasResizePolicy: 2,
+                ensureCrossOriginIsolationHeaders: true,
+                executable: "index",
+                experimentalVK: false,
+                focusCanvas: true,
+                gdextensionLibs: []
+            };
+
+            const engine = new Engine(GODOT_CONFIG);
+
+            engine.startGame({
+                onProgress: function (current, total) {
+                    if (total > 0) {
+                        const pct = Math.min(Math.round((current / total) * 100), 100);
+                        progressBar.style.width = pct + "%";
+                        statusPercent.textContent = pct + "%";
+                        if (pct < 40) {
+                            statusText.textContent = "Downloading game packages...";
+                        } else if (pct < 85) {
+                            statusText.textContent = "Loading WebAssembly bytecode...";
+                        } else if (pct < 100) {
+                            statusText.textContent = "Preparing EOS runtime...";
+                        } else {
+                            statusText.textContent = "Launching demo...";
+                        }
+                    } else {
+                        statusText.textContent = "Loading files...";
+                    }
+                },
+                onPrint: function (text) {
+                    console.log("[Godot]", text);
+                },
+                onPrintError: function (text) {
+                    console.error("[Godot Error]", text);
+                }
+            }).then(() => {
+                // Fade out the custom splash screen smoothly
+                statusPercent.textContent = "100%";
+                progressBar.style.width = "100%";
+                statusText.textContent = "Ready!";
+                setTimeout(() => {
+                    overlay.classList.add("hidden");
+                    canvas.focus();
+                }, 350);
+            }).catch(err => {
+                console.error("Engine start error:", err);
+                showError(err && err.message ? err.message : "Browser does not support WebAssembly or SharedArrayBuffer.");
+            });
+        }
+    </script>
+</body>
+</html>

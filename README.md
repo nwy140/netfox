@@ -1,261 +1,51 @@
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="./docs/assets/press-kit/netfox-banner-hor.svg.preview.png">
-  <source media="(prefers-color-scheme: light)" srcset="./docs/assets/press-kit/netfox-banner-hor-alt.svg.preview.png">
-  <img alt="netfox banner" src="./docs/assets/press-kit/netfox-banner-hor-alt.svg.preview.png">
-</picture>
+# MuJoCo Drop Lab
 
-[![License](https://img.shields.io/github/license/foxssake/netfox)](https://github.com/foxssake/netfox/blob/main/LICENSE)
-[![GitHub Release](https://img.shields.io/github/v/release/foxssake/netfox)](https://github.com/foxssake/netfox/releases)
-[![Documentation](https://img.shields.io/badge/Docs-github.io-blue)](https://foxssake.github.io/netfox/)
-[![Netfox Sharp](https://img.shields.io/badge/View-Netfox_Sharp-orange)](https://github.com/CyFurStudios/NetfoxSharp)
-[![Discord](https://img.shields.io/discord/1253434107656933447?logo=discord&label=Discord)](https://discord.gg/xWGh4GskG5)
-[![ko-fi](https://img.shields.io/badge/Support%20on-ko--fi-ff5e5b?logo=ko-fi)](https://ko-fi.com/T6T8WZD0W)
+Drop three free bodies into a MuJoCo world and inspect the results in Godot. Right-drag to orbit and scroll to zoom. **Pause** freezes the model, **Step** advances one Godot physics tick and pauses, and **Reset** restores the original poses and clock.
 
-A set of addons for responsive online games with the [Godot engine].
+## Local tools
 
-## Features
+The workspace uses Godot 4.7.2 standard, Visual Studio 2022 with the Windows x64 C++ toolchain, CMake 3.24 or newer, Git, Python for godot-cpp binding generation, and Node.js 18 or newer for Godot MCP. The project and exported game run MuJoCo 3.12.0 in-process. They need neither Python nor a server at runtime.
 
-* ⏲️  Consistent timing across multiple machines
-* 🖥️ Supports client-server architecture
-* 🧈 Smooth motion with easy-to-use interpolation
-* 💨 Lag compensation with Client-side Prediction and Server-side Reconciliation
-* 🛜 Bullet-proof connectivity with [noray] integration
+The root game and nested `godot-mujoco/` are independent Git repositories. The fork tracks `origin/main` at yunerious and has gstohl as `upstream`. This workspace uses fork commit `8bd65af` for the Windows DirAccess compatibility fix. It is a local commit. Preserve it when moving the setup by transferring that commit with Git.
 
-## Overview
+## Build and run
 
-The package consists of multiple addons, each with different features:
+Run these commands in the project directory. The first build downloads pinned MuJoCo and godot-cpp. Subsequent builds reuse the CMake trees. The script stages both debug and release DLLs and the MuJoCo runtime in the root addon. The Godot editor imports only the root game because the nested fork has a local `.gdignore`.
 
-* [netfox]
-  * The core package, implements timing, rollback and other multiplayer
-    features
-  * *Start here*
-* [netfox.noray]
-  * Implements [noray] integration to establish connection between players
-  * *Useful for online games*
-* [netfox.extras]
-  * Provides high-level, game-specific, convenience features built on top of
-    netfox, like base classes for input management or weapons
-  * *Check for reusable components for your game*
-* [netfox.internals]
-  * Shared utilities for the other addons
-  * Included as dependency, no need to install separately
+```powershell
+./tools/build-windows.ps1
+$godot = (Resolve-Path ../../GodotApp/Godot_v4.7.2-stable_win64_console.exe).Path
+& $godot --path . --editor
+```
 
-## C# Support
-For experimental C# support, see the [Netfox Sharp repo], and the corresponding
-[Netfox Sharp guide].
+Press F6 with `lab/Lab.tscn` open or F5 to run the main scene. Use `code .` for script and native editing. Close running instances before rebuilding DLLs that Windows has locked.
 
-## Install
+## Verify and export
 
-### Releases
+Install the Windows x86-64 templates from the official 4.7.2 standard template archive if moving to another computer. The debug and release templates are installed on this machine.
 
-Find the latest netfox under
-[Releases](https://github.com/foxssake/netfox/releases)
+```powershell
+& $godot --headless --path . --editor --import
+& $godot --headless --path . --quit-after 180 -- --smoke
+New-Item -Force -ItemType Directory dist | Out-Null
+& $godot --headless --path . --export-release 'Windows x86_64' dist/DropLab.exe
+Copy-Item addons/godot_mujoco/*.txt dist/
+Push-Location dist
+$run = Start-Process ./DropLab.exe -ArgumentList '--headless --quit-after 180 --log-file export-smoke.log -- --smoke' -Wait -PassThru -WindowStyle Hidden
+Get-Content export-smoke.log
+$run.ExitCode
+Pop-Location
+```
 
-Each release contains the addons, and a build of [Forest Brawl] for Windows and
-Linux. Each addon has its dependencies packed with it - e.g.
-*"netfox.extras.vx.y.z.zip"* also contains both *netfox* and
-*netfox.internals*.
+Expect exit code zero and `DROP LAB PASS`. The test checks time stepping, pause, floor contact, visual pose synchronization and reset. The Windows export embeds the Godot resource pack in `DropLab.exe`. Keep its two adjacent DLLs and license notices when copying it to another folder.
 
-> Note: For releases before v1.1.1, a separate *".with-deps.zip"* version
-> contains the addon and its dependencies, while the regular zips contain only
-> the addon itself.
+## Develop
 
-### Asset Library
+- `lab/drop_lab.xml` defines the physical bodies and collision geometry. MJCF uses Z-up and box half-extents. Godot uses Y-up and full mesh dimensions.
+- `lab/lab.gd` creates the camera, lighting, visuals and controls. It calls `MjWorld.step(4)` per 60 Hz tick and maps each body transform from MuJoCo into Godot coordinates. Add new named bodies to the MJCF and bind Godot visuals by name.
+- For robots, inspect joint, actuator and sensor names and dimensions before wiring controls. Place each MJCF model and its relative assets in a dedicated directory, include those raw files in the export preset, and test the packed export. Keep RL or ONNX inference behind an explicit controller interface. Use a single authoritative simulator when adding multiplayer.
+- The native API and upstream example tests live in the fork. See its README for model loading, state, controls, sensors and visual debugging.
+- The Coding-Solo Godot MCP server is installed at `../../Tools/godot-mcp` and registered as `godot` in Codex. Its stdio protocol was tested with version and project queries, editor launch, project run, debug output and stop. A fresh Codex invocation connected and discovered its tools. This session's approval policy blocked the actual Codex tool calls. Use the terminal for deterministic builds, exports and exit-code checks.
+- The installed Codex skill is `godot-mujoco-development`. Start a new Codex chat if the skill or newly registered server is missing from the current chat.
 
-Search for the addon name in Godot's AssetLib or download from the site:
-
-* [netfox](https://godotengine.org/asset-library/asset/2375)
-* [netfox.noray](https://godotengine.org/asset-library/asset/2376)
-* [netfox.extras](https://godotengine.org/asset-library/asset/2377)
-
-### Source
-
-Download the [source] and copy the addons of your choice to your Godot project.
-
-### Enable the addons
-
-After adding *netfox* to your project, make sure to enable the addons in your
-project settings. Otherwise, Godot will present you with errors about
-undeclared identifiers.
-
-## Upgrading
-
-If you're upgrading from an older version of netfox, refer to the [upgrade
-guide](docs/upgrading.md).
-
-## Usage
-
-See the [docs](https://foxssake.github.io/netfox/).
-
-### Supported versions
-
-Godot 4.x is supported by netfox. If you find any issue using any supported
-version, please [open an issue].
-
-Forest Brawl and the other examples are written against Godot 4.1. They may or
-may not work when opened with any other version.
-
-### Prototyping
-
-To try your game online with [noray], a free to use instance is hosted at
-`tomfol.io:8890`, the same instance used by [Forest Brawl].
-
-You can use this [noray] instance to quickly test your games online, but is not
-recommended for shipping games. The instance has configured limits, and no
-uptime guarantees are made.
-
-### Examples
-
-#### Comparison sample
-
-* [Single player](examples/single-player)
-* [Simple example](examples/multiplayer-simple)
-* [Example with netfox](examples/multiplayer-netfox)
-
-To provide a short intro on how to get started with netfox, and how it fares
-compared to built-in multiplayer tools, a simple demo was implemented as a
-single-player game, which was ported to multiplayer using both a naive approach
-and netfox.
-
-#### Feature examples
-
-Each of these examples give a starting point to a specific feature:
-
-* [Input gathering](examples/input-gathering)
-* [State machines](examples/multiplayer-state-machine)
-* [Multiplayer FPS](examples/multiplayer-fps)
-* [Rollback Debugger](examples/rollback-debugger)
-* [Property Configuration](examples/property-configuration)
-* [Input prediction](examples/input-prediction)
-* [NPCs with rollback](examples/rollback-npc)
-* [NPCs with StateSynchronizer](examples/state-synchronizer-npc)
-* [Visibility filtering](examples/visibility-filtering)
-
-#### Example games
-
-##### Forest Brawl
-
-To provide examples of netfox usage in an actual game, [Forest Brawl] was
-created and included specifically for this purpose.
-
-It's a party game where an arbitrary amount of players compete by trying to
-knock eachother off of the map.
-
-##### Godot Rocket League
-
-Play soccer with cars, in Godot, with [Godot Rocket League](https://github.com/albertok/godot-rocket-league)!
-
-Demonstrates *netfox*'s physics rollback capabilities, ensuring smooth and
-responsive physics-based gameplay.
-
-## Hosting
-
-[Edgegap] has partnered up with *netfox*, offering [game hosting],
-[matchmaking], and [more].
-
-Check out the official [netfox Forest Brawl guide] to get started!
-
-[Edgegap]: https://edgegap.com/
-[game hosting]: https://edgegap.com/platform/orchestration-hosting
-[matchmaking]: https://edgegap.com/platform/matchmaker
-[more]: https://edgegap.com/platform/technology-explainer-game-server-hosting-orchestration
-[netfox Forest Brawl guide]: https://docs.edgegap.com/docs/sample-projects/godot/netfox-forest-brawl
-
-## Built with netfox
-
-Games built with netfox, coming to a Steam near you! See the more on the site's
-[Made with netfox](https://foxssake.github.io/netfox/latest/made-with-netfox/)
-page!
-
-<a href="https://store.steampowered.com/app/3180520/Bubble_Battle/">
-
-![Bubble Battle](docs/assets/showcase/bubble-battle.jpg)
-
-</a>
-
-<a href="https://store.steampowered.com/app/3423700/PL4noB/">
-
-![PL4no-B](docs/assets/showcase/pl4nob.jpg)
-
-</a>
-
-<a href="https://store.steampowered.com/app/3204000/Chrome_Carnage/">
-
-![Chrome Carnage](docs/assets/showcase/chrome-carnage.jpg)
-
-</a>
-
-<a href="https://store.steampowered.com/app/3952070/Nitro_Turtles/">
-
-![Nitro Turtles](docs/assets/showcase/nitro-turtles.jpg)
-
-</a>
-
-<a href="https://store.steampowered.com/app/3698510/Kick_and_Hide/">
-
-![Kick and Hide](docs/assets/showcase/kick-and-hide.jpg)
-
-</a>
-
-Building something cool with netfox? Whether it's released or in progress, feel
-free to open a PR, adding your game to the list!
-
-## License
-
-netfox is under the [MIT license](LICENSE).
-
-Note that the repository contains assets made by other people as well. For
-these cases, the relevant licenses can be found in the assets' directories.
-
-## Issues
-
-In case of any issues, comments, or questions, please feel free to [open an issue]!
-
-## Contribution
-
-Contributions are welcome! Please feel free to fork the repository and open a
-PR. Ideally, your PR implements a single thing, optionally refers to an
-existing issue, and follows the [GDScript style guide].
-
-Please note that depending on the feature/fix you implement, the PR may need to
-undergo changes, or in some cases, get rejected if it doesn't fit netfox's
-intended feature set or vision.
-
-If you feel like it, grant the netfox author(s) write permission to your fork,
-so we can update the PR if needed.
-
-If you're not sure if the PR would fit netfox or not, [open an issue] first,
-mentioning that you'd be willing to contribute a PR.
-
-Author(s) at the time of writing:
-
-* @elementbound
-
-## Funding
-
-If you've found netfox useful, feel free to fund us on ko-fi:
-
-[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/T6T8WZD0W)
-
-Donations are always appreciated and taken as gratitude for the work that has
-already been done.
-
-If you'd like to fund a specific feature or development, please contact us in [email].
-
-[Netfox Sharp repo]: https://github.com/CyFurStudios/NetfoxSharp
-[Netfox Sharp guide]: https://foxssake.github.io/netfox/latest/netfox/guides/netfox-sharp/
-
-[source]: https://github.com/foxssake/netfox/archive/refs/heads/main.zip
-[Godot engine]: https://godotengine.org/
-[noray]: https://github.com/foxssake/noray
-
-[netfox]: addons/netfox
-[netfox.noray]: addons/netfox.noray
-[netfox.extras]: addons/netfox.extras
-[netfox.internals]: addons/netfox.internals
-[Forest Brawl]: examples/forest-brawl
-
-[open an issue]: https://github.com/foxssake/netfox/issues
-[GDScript style guide]: https://docs.godotengine.org/en/stable/tutorials/scripting/gdscript/gdscript_styleguide.html
-
-[email]: mailto:foxssake@gmail.com?subject=netfox
+Sources: [Godot release and templates](https://github.com/godotengine/godot-builds/releases/tag/4.7.2-stable), [MuJoCo integration](https://github.com/gstohl/godot-mujoco), [Godot MCP](https://github.com/Coding-Solo/godot-mcp).

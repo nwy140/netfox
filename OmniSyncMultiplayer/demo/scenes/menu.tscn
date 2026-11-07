@@ -1,0 +1,227 @@
+[gd_scene format=3 uid="uid://blefbnf0t16v6"]
+
+[ext_resource type="Texture2D" uid="uid://cfudb8x2beh2d" path="res://OmniSyncMultiplayer/demo/assets/button_enabled.png" id="1_7qibs"]
+[ext_resource type="Texture2D" uid="uid://0ooxb8ni7g3q" path="res://OmniSyncMultiplayer/demo/assets/background_dark.png" id="1_nxame"]
+[ext_resource type="Texture2D" uid="uid://cetjhsj0yg4u7" path="res://OmniSyncMultiplayer/demo/assets/button_disabled.png" id="2_6gfqm"]
+[ext_resource type="FontFile" uid="uid://h27k01oo0dkj" path="res://OmniSyncMultiplayer/demo/assets/quicksand.ttf" id="3_uylvf"]
+
+[sub_resource type="GDScript" id="GDScript_uylvf"]
+resource_name = "Menu"
+script/source = "extends Control
+
+@onready var play_button: TextureButton = $CenterContainer/PlayButton
+@onready var timer_label: RichTextLabel = $MarginContainer/Timer
+
+const GAME_SCENE = \"uid://ctoysbafhx4tj\"
+
+var matchmaking_time: float = 0.0
+
+func _ready() -> void:
+	var args := OS.get_cmdline_user_args()
+	if \"--g1-walk-smoke\" in args or \"--g1-checkpoint-smoke\" in args:
+		get_tree().change_scene_to_file.call_deferred(\"res://UnitreeG1Walk.tscn\")
+		return
+	OmniManager.debug_mode = OmniManager.DEBUG.INFO
+	var g1_button := Button.new()
+	g1_button.text = \"G1 Multiplayer\"
+	g1_button.position = Vector2(24, 24)
+	add_child(g1_button)
+	g1_button.pressed.connect(func() -> void:
+		get_tree().change_scene_to_file(\"res://G1MultiplayerLobby.tscn\"))
+	
+	# Stop _process until matchmaking starts
+	set_process(false)
+	timer_label.hide()
+	
+	_setup_signals()
+	_update_play_button_state()
+
+
+func _process(delta: float) -> void:
+	matchmaking_time += delta
+	timer_label.text = _format_time(matchmaking_time)
+
+
+# --- Signal Setup ---
+
+func _setup_signals() -> void:
+	play_button.pressed.connect(_on_play_button_pressed)
+	
+	OmniManager.eos_logged_in.connect(_on_eos_logged_in)
+	OmniManager.match_found.connect(_on_match_found)
+	OmniManager.eos_error.connect(_on_eos_error)
+
+
+# --- UI & State Helpers ---
+
+func _update_play_button_state() -> void:
+	play_button.disabled = not OmniManager.is_logged_in
+
+
+func _start_matchmaking_timer() -> void:
+	matchmaking_time = 0.0
+	timer_label.text = _format_time(0.0)
+	timer_label.show()
+	set_process(true)
+
+
+func _stop_matchmaking_timer() -> void:
+	set_process(false)
+	timer_label.hide()
+
+
+func _format_time(time_in_seconds: float) -> String:
+	var total_seconds: int = int(time_in_seconds)
+	var minutes: int = floori(total_seconds / 60.0)
+	var seconds: int = total_seconds % 60
+	return \"%02d:%02d\" % [minutes, seconds]
+
+
+# --- Callbacks ---
+
+func _on_play_button_pressed() -> void:
+	play_button.disabled = true
+	_start_matchmaking_timer()
+	OmniManager.search_for_match()
+
+
+func _on_eos_logged_in(_puid: Variant) -> void:
+	play_button.disabled = false
+
+
+func _on_match_found() -> void:
+	_stop_matchmaking_timer()
+	
+	# Transition to the game scene here
+	get_tree().change_scene_to_file(GAME_SCENE)
+
+
+func _on_eos_error(context: String, msg: String) -> void:
+	if context == \"Matchmaking\":
+		printerr(\"Matchmaking Error: %s\" % msg)
+		_stop_matchmaking_timer()
+		play_button.disabled = false
+"
+
+[sub_resource type="FontVariation" id="FontVariation_gssul"]
+base_font = ExtResource("3_uylvf")
+spacing_glyph = 6
+
+[sub_resource type="Theme" id="Theme_g5a62"]
+
+[sub_resource type="GDScript" id="GDScript_6gfqm"]
+resource_name = "ButtonAnimator"
+script/source = "extends TextureButton
+
+const NORMAL_SCALE: Vector2 = Vector2(0.9, 0.9)
+const DOWN_SCALE: Vector2 = Vector2(0.8, 0.8)
+const TWEEN_DURATION: float = 0.35
+
+var tween: Tween
+var is_mouse_inside: bool = false
+var is_pressed_down: bool = false
+var is_mobile: bool = false
+
+func _ready() -> void:
+	await get_tree().create_timer(0.1).timeout
+	scale = NORMAL_SCALE
+	pivot_offset_ratio = Vector2.ONE/2
+	button_down.connect(func() -> void:
+		_scale_tween(DOWN_SCALE)
+	)
+	button_up.connect(func() -> void:
+		_scale_tween(NORMAL_SCALE)
+	)
+	
+func _scale_tween(target_scale: Vector2) -> void:
+	if tween: tween.kill()
+	tween = create_tween()
+	tween.tween_property(self, \"scale\", target_scale, TWEEN_DURATION).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_EXPO)
+"
+
+[sub_resource type="FontVariation" id="FontVariation_uylvf"]
+base_font = ExtResource("3_uylvf")
+spacing_glyph = 15
+
+[node name="Menu" type="Control" unique_id=1739153814]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = SubResource("GDScript_uylvf")
+
+[node name="Background" type="Parallax2D" parent="." unique_id=1030688680]
+repeat_size = Vector2(1280, 0)
+autoscroll = Vector2(20, 0)
+repeat_times = 20
+
+[node name="Sprite" type="Sprite2D" parent="Background" unique_id=1440463001]
+texture = ExtResource("1_nxame")
+centered = false
+
+[node name="MarginContainer" type="MarginContainer" parent="." unique_id=7961995]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+theme_override_constants/margin_left = 50
+theme_override_constants/margin_top = 50
+theme_override_constants/margin_right = 50
+theme_override_constants/margin_bottom = 50
+
+[node name="Timer" type="RichTextLabel" parent="MarginContainer" unique_id=2090767957]
+clip_contents = false
+layout_mode = 2
+mouse_filter = 2
+theme_override_colors/font_shadow_color = Color(0, 0, 0, 0.39215687)
+theme_override_constants/shadow_outline_size = 30
+theme_override_constants/shadow_offset_x = 0
+theme_override_constants/shadow_offset_y = 5
+theme_override_constants/outline_size = 30
+theme_override_fonts/normal_font = SubResource("FontVariation_gssul")
+theme_override_font_sizes/normal_font_size = 79
+bbcode_enabled = true
+text = "Timer"
+horizontal_alignment = 2
+vertical_alignment = 2
+
+[node name="CenterContainer" type="CenterContainer" parent="." unique_id=561427143]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="PlayButton" type="TextureButton" parent="CenterContainer" unique_id=1959722867]
+layout_mode = 2
+theme = SubResource("Theme_g5a62")
+texture_normal = ExtResource("1_7qibs")
+texture_disabled = ExtResource("2_6gfqm")
+script = SubResource("GDScript_6gfqm")
+
+[node name="Label" type="RichTextLabel" parent="CenterContainer/PlayButton" unique_id=695433567]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_bottom = -17.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+theme_override_colors/font_shadow_color = Color(0, 0, 0, 0.39215687)
+theme_override_constants/shadow_outline_size = 30
+theme_override_constants/shadow_offset_x = 0
+theme_override_constants/shadow_offset_y = 5
+theme_override_constants/outline_size = 30
+theme_override_fonts/normal_font = SubResource("FontVariation_uylvf")
+theme_override_font_sizes/normal_font_size = 79
+bbcode_enabled = true
+text = "[wave]PLAY"
+horizontal_alignment = 1
+vertical_alignment = 1

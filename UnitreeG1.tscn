@@ -1,0 +1,284 @@
+[gd_scene load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://scripts/unitree_g1.gd" id="1"]
+
+[sub_resource type="StandardMaterial3D" id="FloorMat"]
+albedo_color = Color(0.20, 0.29, 0.36, 1)
+
+[sub_resource type="BoxMesh" id="Floor"]
+material = SubResource("FloorMat")
+size = Vector3(8, 0.1, 8)
+
+[sub_resource type="Environment" id="Env"]
+background_mode = 1
+background_color = Color(0.09, 0.13, 0.18, 1)
+ambient_light_source = 3
+ambient_light_color = Color(0.73, 0.82, 1, 1)
+ambient_light_energy = 0.65
+
+[node name="UnitreeG1" type="Node3D"]
+script = ExtResource("1")
+
+[node name="Camera3D" type="Camera3D" parent="."]
+position = Vector3(2.2, 1.45, 1.45)
+rotation = Vector3(-0.24, 0.99, 0)
+current = true
+
+[node name="Environment" type="WorldEnvironment" parent="."]
+environment = SubResource("Env")
+
+[node name="KeyLight" type="DirectionalLight3D" parent="."]
+rotation_degrees = Vector3(-50, -30, 0)
+shadow_enabled = true
+
+[node name="Floor" type="MeshInstance3D" parent="."]
+position = Vector3(0, -0.05, 0)
+mesh = SubResource("Floor")
+
+[node name="Robot" type="Node3D" parent="."]
+rotation_degrees = Vector3(-90, 0, 0)
+
+[node name="pelvis" type="Node3D" parent="Robot"]
+position = Vector3(0, 0, 0.793)
+
+[node name="pelvis_mesh" type="MeshInstance3D" parent="Robot/pelvis"]
+metadata/stl = "pelvis.STL"
+metadata/dark = true
+
+[node name="pelvis_contour_link_mesh" type="MeshInstance3D" parent="Robot/pelvis"]
+metadata/stl = "pelvis_contour_link.STL"
+metadata/dark = false
+
+[node name="left_hip_pitch_link" type="Node3D" parent="Robot/pelvis"]
+position = Vector3(0, 0.064452, -0.1027)
+
+[node name="left_hip_pitch_link_mesh" type="MeshInstance3D" parent="Robot/pelvis/left_hip_pitch_link"]
+metadata/stl = "left_hip_pitch_link.STL"
+metadata/dark = true
+
+[node name="left_hip_roll_link" type="Node3D" parent="Robot/pelvis/left_hip_pitch_link"]
+position = Vector3(0, 0.052, -0.030465)
+quaternion = Quaternion(0, -0.0873386, 0, 0.996179)
+
+[node name="left_hip_roll_link_mesh" type="MeshInstance3D" parent="Robot/pelvis/left_hip_pitch_link/left_hip_roll_link"]
+metadata/stl = "left_hip_roll_link.STL"
+metadata/dark = false
+
+[node name="left_hip_yaw_link" type="Node3D" parent="Robot/pelvis/left_hip_pitch_link/left_hip_roll_link"]
+position = Vector3(0.025001, 0, -0.12412)
+
+[node name="left_hip_yaw_link_mesh" type="MeshInstance3D" parent="Robot/pelvis/left_hip_pitch_link/left_hip_roll_link/left_hip_yaw_link"]
+metadata/stl = "left_hip_yaw_link.STL"
+metadata/dark = false
+
+[node name="left_knee_link" type="Node3D" parent="Robot/pelvis/left_hip_pitch_link/left_hip_roll_link/left_hip_yaw_link"]
+position = Vector3(-0.078273, 0.0021489, -0.17734)
+quaternion = Quaternion(0, 0.0873386, 0, 0.996179)
+
+[node name="left_knee_link_mesh" type="MeshInstance3D" parent="Robot/pelvis/left_hip_pitch_link/left_hip_roll_link/left_hip_yaw_link/left_knee_link"]
+metadata/stl = "left_knee_link.STL"
+metadata/dark = false
+
+[node name="left_ankle_pitch_link" type="Node3D" parent="Robot/pelvis/left_hip_pitch_link/left_hip_roll_link/left_hip_yaw_link/left_knee_link"]
+position = Vector3(0, -9.4445e-05, -0.30001)
+
+[node name="left_ankle_pitch_link_mesh" type="MeshInstance3D" parent="Robot/pelvis/left_hip_pitch_link/left_hip_roll_link/left_hip_yaw_link/left_knee_link/left_ankle_pitch_link"]
+metadata/stl = "left_ankle_pitch_link.STL"
+metadata/dark = false
+
+[node name="left_ankle_roll_link" type="Node3D" parent="Robot/pelvis/left_hip_pitch_link/left_hip_roll_link/left_hip_yaw_link/left_knee_link/left_ankle_pitch_link"]
+position = Vector3(0, 0, -0.017558)
+
+[node name="left_ankle_roll_link_mesh" type="MeshInstance3D" parent="Robot/pelvis/left_hip_pitch_link/left_hip_roll_link/left_hip_yaw_link/left_knee_link/left_ankle_pitch_link/left_ankle_roll_link"]
+metadata/stl = "left_ankle_roll_link.STL"
+metadata/dark = true
+
+[node name="right_hip_pitch_link" type="Node3D" parent="Robot/pelvis"]
+position = Vector3(0, -0.064452, -0.1027)
+
+[node name="right_hip_pitch_link_mesh" type="MeshInstance3D" parent="Robot/pelvis/right_hip_pitch_link"]
+metadata/stl = "right_hip_pitch_link.STL"
+metadata/dark = true
+
+[node name="right_hip_roll_link" type="Node3D" parent="Robot/pelvis/right_hip_pitch_link"]
+position = Vector3(0, -0.052, -0.030465)
+quaternion = Quaternion(0, -0.0873386, 0, 0.996179)
+
+[node name="right_hip_roll_link_mesh" type="MeshInstance3D" parent="Robot/pelvis/right_hip_pitch_link/right_hip_roll_link"]
+metadata/stl = "right_hip_roll_link.STL"
+metadata/dark = false
+
+[node name="right_hip_yaw_link" type="Node3D" parent="Robot/pelvis/right_hip_pitch_link/right_hip_roll_link"]
+position = Vector3(0.025001, 0, -0.12412)
+
+[node name="right_hip_yaw_link_mesh" type="MeshInstance3D" parent="Robot/pelvis/right_hip_pitch_link/right_hip_roll_link/right_hip_yaw_link"]
+metadata/stl = "right_hip_yaw_link.STL"
+metadata/dark = false
+
+[node name="right_knee_link" type="Node3D" parent="Robot/pelvis/right_hip_pitch_link/right_hip_roll_link/right_hip_yaw_link"]
+position = Vector3(-0.078273, -0.0021489, -0.17734)
+quaternion = Quaternion(0, 0.0873386, 0, 0.996179)
+
+[node name="right_knee_link_mesh" type="MeshInstance3D" parent="Robot/pelvis/right_hip_pitch_link/right_hip_roll_link/right_hip_yaw_link/right_knee_link"]
+metadata/stl = "right_knee_link.STL"
+metadata/dark = false
+
+[node name="right_ankle_pitch_link" type="Node3D" parent="Robot/pelvis/right_hip_pitch_link/right_hip_roll_link/right_hip_yaw_link/right_knee_link"]
+position = Vector3(0, 9.4445e-05, -0.30001)
+
+[node name="right_ankle_pitch_link_mesh" type="MeshInstance3D" parent="Robot/pelvis/right_hip_pitch_link/right_hip_roll_link/right_hip_yaw_link/right_knee_link/right_ankle_pitch_link"]
+metadata/stl = "right_ankle_pitch_link.STL"
+metadata/dark = false
+
+[node name="right_ankle_roll_link" type="Node3D" parent="Robot/pelvis/right_hip_pitch_link/right_hip_roll_link/right_hip_yaw_link/right_knee_link/right_ankle_pitch_link"]
+position = Vector3(0, 0, -0.017558)
+
+[node name="right_ankle_roll_link_mesh" type="MeshInstance3D" parent="Robot/pelvis/right_hip_pitch_link/right_hip_roll_link/right_hip_yaw_link/right_knee_link/right_ankle_pitch_link/right_ankle_roll_link"]
+metadata/stl = "right_ankle_roll_link.STL"
+metadata/dark = true
+
+[node name="waist_yaw_link" type="Node3D" parent="Robot/pelvis"]
+
+[node name="waist_yaw_link_mesh" type="MeshInstance3D" parent="Robot/pelvis/waist_yaw_link"]
+metadata/stl = "waist_yaw_link_rev_1_0.STL"
+metadata/dark = false
+
+[node name="waist_roll_link" type="Node3D" parent="Robot/pelvis/waist_yaw_link"]
+position = Vector3(-0.0039635, 0, 0.044)
+
+[node name="waist_roll_link_mesh" type="MeshInstance3D" parent="Robot/pelvis/waist_yaw_link/waist_roll_link"]
+metadata/stl = "waist_roll_link_rev_1_0.STL"
+metadata/dark = false
+
+[node name="torso_link" type="Node3D" parent="Robot/pelvis/waist_yaw_link/waist_roll_link"]
+
+[node name="torso_link_mesh" type="MeshInstance3D" parent="Robot/pelvis/waist_yaw_link/waist_roll_link/torso_link"]
+metadata/stl = "torso_link_rev_1_0.STL"
+metadata/dark = false
+
+[node name="logo_link_mesh" type="MeshInstance3D" parent="Robot/pelvis/waist_yaw_link/waist_roll_link/torso_link"]
+metadata/stl = "logo_link.STL"
+metadata/dark = true
+
+[node name="head_link_mesh" type="MeshInstance3D" parent="Robot/pelvis/waist_yaw_link/waist_roll_link/torso_link"]
+metadata/stl = "head_link.STL"
+metadata/dark = true
+
+[node name="left_shoulder_pitch_link" type="Node3D" parent="Robot/pelvis/waist_yaw_link/waist_roll_link/torso_link"]
+position = Vector3(0.0039563, 0.10022, 0.24778)
+quaternion = Quaternion(0.139201, 1.38722e-05, -9.86868e-05, 0.990264)
+
+[node name="left_shoulder_pitch_link_mesh" type="MeshInstance3D" parent="Robot/pelvis/waist_yaw_link/waist_roll_link/torso_link/left_shoulder_pitch_link"]
+metadata/stl = "left_shoulder_pitch_link.STL"
+metadata/dark = false
+
+[node name="left_shoulder_roll_link" type="Node3D" parent="Robot/pelvis/waist_yaw_link/waist_roll_link/torso_link/left_shoulder_pitch_link"]
+position = Vector3(0, 0.038, -0.013831)
+quaternion = Quaternion(-0.139172, 0, 0, 0.990268)
+
+[node name="left_shoulder_roll_link_mesh" type="MeshInstance3D" parent="Robot/pelvis/waist_yaw_link/waist_roll_link/torso_link/left_shoulder_pitch_link/left_shoulder_roll_link"]
+metadata/stl = "left_shoulder_roll_link.STL"
+metadata/dark = false
+
+[node name="left_shoulder_yaw_link" type="Node3D" parent="Robot/pelvis/waist_yaw_link/waist_roll_link/torso_link/left_shoulder_pitch_link/left_shoulder_roll_link"]
+position = Vector3(0, 0.00624, -0.1032)
+
+[node name="left_shoulder_yaw_link_mesh" type="MeshInstance3D" parent="Robot/pelvis/waist_yaw_link/waist_roll_link/torso_link/left_shoulder_pitch_link/left_shoulder_roll_link/left_shoulder_yaw_link"]
+metadata/stl = "left_shoulder_yaw_link.STL"
+metadata/dark = false
+
+[node name="left_elbow_link" type="Node3D" parent="Robot/pelvis/waist_yaw_link/waist_roll_link/torso_link/left_shoulder_pitch_link/left_shoulder_roll_link/left_shoulder_yaw_link"]
+position = Vector3(0.015783, 0, -0.080518)
+
+[node name="left_elbow_link_mesh" type="MeshInstance3D" parent="Robot/pelvis/waist_yaw_link/waist_roll_link/torso_link/left_shoulder_pitch_link/left_shoulder_roll_link/left_shoulder_yaw_link/left_elbow_link"]
+metadata/stl = "left_elbow_link.STL"
+metadata/dark = false
+
+[node name="left_wrist_roll_link" type="Node3D" parent="Robot/pelvis/waist_yaw_link/waist_roll_link/torso_link/left_shoulder_pitch_link/left_shoulder_roll_link/left_shoulder_yaw_link/left_elbow_link"]
+position = Vector3(0.1, 0.00188791, -0.01)
+
+[node name="left_wrist_roll_link_mesh" type="MeshInstance3D" parent="Robot/pelvis/waist_yaw_link/waist_roll_link/torso_link/left_shoulder_pitch_link/left_shoulder_roll_link/left_shoulder_yaw_link/left_elbow_link/left_wrist_roll_link"]
+metadata/stl = "left_wrist_roll_link.STL"
+metadata/dark = false
+
+[node name="left_wrist_pitch_link" type="Node3D" parent="Robot/pelvis/waist_yaw_link/waist_roll_link/torso_link/left_shoulder_pitch_link/left_shoulder_roll_link/left_shoulder_yaw_link/left_elbow_link/left_wrist_roll_link"]
+position = Vector3(0.038, 0, 0)
+
+[node name="left_wrist_pitch_link_mesh" type="MeshInstance3D" parent="Robot/pelvis/waist_yaw_link/waist_roll_link/torso_link/left_shoulder_pitch_link/left_shoulder_roll_link/left_shoulder_yaw_link/left_elbow_link/left_wrist_roll_link/left_wrist_pitch_link"]
+metadata/stl = "left_wrist_pitch_link.STL"
+metadata/dark = false
+
+[node name="left_wrist_yaw_link" type="Node3D" parent="Robot/pelvis/waist_yaw_link/waist_roll_link/torso_link/left_shoulder_pitch_link/left_shoulder_roll_link/left_shoulder_yaw_link/left_elbow_link/left_wrist_roll_link/left_wrist_pitch_link"]
+position = Vector3(0.046, 0, 0)
+
+[node name="left_wrist_yaw_link_mesh" type="MeshInstance3D" parent="Robot/pelvis/waist_yaw_link/waist_roll_link/torso_link/left_shoulder_pitch_link/left_shoulder_roll_link/left_shoulder_yaw_link/left_elbow_link/left_wrist_roll_link/left_wrist_pitch_link/left_wrist_yaw_link"]
+metadata/stl = "left_wrist_yaw_link.STL"
+metadata/dark = false
+
+[node name="left_rubber_hand_mesh" type="MeshInstance3D" parent="Robot/pelvis/waist_yaw_link/waist_roll_link/torso_link/left_shoulder_pitch_link/left_shoulder_roll_link/left_shoulder_yaw_link/left_elbow_link/left_wrist_roll_link/left_wrist_pitch_link/left_wrist_yaw_link"]
+metadata/stl = "left_rubber_hand.STL"
+metadata/dark = false
+
+[node name="right_shoulder_pitch_link" type="Node3D" parent="Robot/pelvis/waist_yaw_link/waist_roll_link/torso_link"]
+position = Vector3(0.0039563, -0.10021, 0.24778)
+quaternion = Quaternion(-0.139201, 1.38722e-05, 9.86868e-05, 0.990264)
+
+[node name="right_shoulder_pitch_link_mesh" type="MeshInstance3D" parent="Robot/pelvis/waist_yaw_link/waist_roll_link/torso_link/right_shoulder_pitch_link"]
+metadata/stl = "right_shoulder_pitch_link.STL"
+metadata/dark = false
+
+[node name="right_shoulder_roll_link" type="Node3D" parent="Robot/pelvis/waist_yaw_link/waist_roll_link/torso_link/right_shoulder_pitch_link"]
+position = Vector3(0, -0.038, -0.013831)
+quaternion = Quaternion(0.139172, 0, 0, 0.990268)
+
+[node name="right_shoulder_roll_link_mesh" type="MeshInstance3D" parent="Robot/pelvis/waist_yaw_link/waist_roll_link/torso_link/right_shoulder_pitch_link/right_shoulder_roll_link"]
+metadata/stl = "right_shoulder_roll_link.STL"
+metadata/dark = false
+
+[node name="right_shoulder_yaw_link" type="Node3D" parent="Robot/pelvis/waist_yaw_link/waist_roll_link/torso_link/right_shoulder_pitch_link/right_shoulder_roll_link"]
+position = Vector3(0, -0.00624, -0.1032)
+
+[node name="right_shoulder_yaw_link_mesh" type="MeshInstance3D" parent="Robot/pelvis/waist_yaw_link/waist_roll_link/torso_link/right_shoulder_pitch_link/right_shoulder_roll_link/right_shoulder_yaw_link"]
+metadata/stl = "right_shoulder_yaw_link.STL"
+metadata/dark = false
+
+[node name="right_elbow_link" type="Node3D" parent="Robot/pelvis/waist_yaw_link/waist_roll_link/torso_link/right_shoulder_pitch_link/right_shoulder_roll_link/right_shoulder_yaw_link"]
+position = Vector3(0.015783, 0, -0.080518)
+
+[node name="right_elbow_link_mesh" type="MeshInstance3D" parent="Robot/pelvis/waist_yaw_link/waist_roll_link/torso_link/right_shoulder_pitch_link/right_shoulder_roll_link/right_shoulder_yaw_link/right_elbow_link"]
+metadata/stl = "right_elbow_link.STL"
+metadata/dark = false
+
+[node name="right_wrist_roll_link" type="Node3D" parent="Robot/pelvis/waist_yaw_link/waist_roll_link/torso_link/right_shoulder_pitch_link/right_shoulder_roll_link/right_shoulder_yaw_link/right_elbow_link"]
+position = Vector3(0.1, -0.00188791, -0.01)
+
+[node name="right_wrist_roll_link_mesh" type="MeshInstance3D" parent="Robot/pelvis/waist_yaw_link/waist_roll_link/torso_link/right_shoulder_pitch_link/right_shoulder_roll_link/right_shoulder_yaw_link/right_elbow_link/right_wrist_roll_link"]
+metadata/stl = "right_wrist_roll_link.STL"
+metadata/dark = false
+
+[node name="right_wrist_pitch_link" type="Node3D" parent="Robot/pelvis/waist_yaw_link/waist_roll_link/torso_link/right_shoulder_pitch_link/right_shoulder_roll_link/right_shoulder_yaw_link/right_elbow_link/right_wrist_roll_link"]
+position = Vector3(0.038, 0, 0)
+
+[node name="right_wrist_pitch_link_mesh" type="MeshInstance3D" parent="Robot/pelvis/waist_yaw_link/waist_roll_link/torso_link/right_shoulder_pitch_link/right_shoulder_roll_link/right_shoulder_yaw_link/right_elbow_link/right_wrist_roll_link/right_wrist_pitch_link"]
+metadata/stl = "right_wrist_pitch_link.STL"
+metadata/dark = false
+
+[node name="right_wrist_yaw_link" type="Node3D" parent="Robot/pelvis/waist_yaw_link/waist_roll_link/torso_link/right_shoulder_pitch_link/right_shoulder_roll_link/right_shoulder_yaw_link/right_elbow_link/right_wrist_roll_link/right_wrist_pitch_link"]
+position = Vector3(0.046, 0, 0)
+
+[node name="right_wrist_yaw_link_mesh" type="MeshInstance3D" parent="Robot/pelvis/waist_yaw_link/waist_roll_link/torso_link/right_shoulder_pitch_link/right_shoulder_roll_link/right_shoulder_yaw_link/right_elbow_link/right_wrist_roll_link/right_wrist_pitch_link/right_wrist_yaw_link"]
+metadata/stl = "right_wrist_yaw_link.STL"
+metadata/dark = false
+
+[node name="right_rubber_hand_mesh" type="MeshInstance3D" parent="Robot/pelvis/waist_yaw_link/waist_roll_link/torso_link/right_shoulder_pitch_link/right_shoulder_roll_link/right_shoulder_yaw_link/right_elbow_link/right_wrist_roll_link/right_wrist_pitch_link/right_wrist_yaw_link"]
+metadata/stl = "right_rubber_hand.STL"
+metadata/dark = false
+
+[node name="UI" type="CanvasLayer" parent="."]
+
+[node name="Panel" type="PanelContainer" parent="UI"]
+offset_left = 16.0
+offset_top = 16.0
+
+[node name="Status" type="Label" parent="UI/Panel"]
+text = " UNITREE G1  |  MUJOCO FALL TEST \n Space: pause   R: reset   N: step "

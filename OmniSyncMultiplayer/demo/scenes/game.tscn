@@ -1,0 +1,499 @@
+[gd_scene format=3 uid="uid://ctoysbafhx4tj"]
+
+[ext_resource type="PackedScene" uid="uid://cphcak8bdbhu" path="res://OmniSyncMultiplayer/demo/scenes/player.tscn" id="1_b8t8y"]
+[ext_resource type="Texture2D" uid="uid://dwm0tvl0h0lpt" path="res://OmniSyncMultiplayer/demo/assets/background_light.png" id="1_oqx46"]
+[ext_resource type="Texture2D" uid="uid://brcup1eykutkb" path="res://OmniSyncMultiplayer/demo/assets/square.png" id="2_gssul"]
+[ext_resource type="FontFile" uid="uid://h27k01oo0dkj" path="res://OmniSyncMultiplayer/demo/assets/quicksand.ttf" id="3_4y8mc"]
+[ext_resource type="Texture2D" uid="uid://cetjhsj0yg4u7" path="res://OmniSyncMultiplayer/demo/assets/button_disabled.png" id="6_5sgfa"]
+
+[sub_resource type="GDScript" id="GDScript_pjiy7"]
+resource_name = "Game"
+script/source = "extends Node2D
+
+@export var player_scene: PackedScene
+
+const MENU_SCENE = \"uid://blefbnf0t16v6\"
+
+@onready var player_positions: Node2D = $PlayerPositions
+@onready var player_container: Node2D = $PlayerContainer
+@onready var spawner: MultiplayerSpawner = $Spawner
+@onready var label: RichTextLabel = $UI/Control/MarginContainer/Ping
+@onready var background: Node2D = $Background
+
+var _is_returning_to_menu: bool = false
+var _game_started: bool = false
+var _migration_timeout_timer: SceneTreeTimer = null
+
+func _is_server() -> bool:
+	return multiplayer.has_multiplayer_peer() and multiplayer.is_server()
+
+func _ready() -> void:
+	# Configure background
+	background.global_position = get_viewport_rect().size/2
+	
+	# Configure custom spawn function for MultiplayerSpawner
+	spawner.spawn_function = _custom_spawn_player
+	
+	# Listen for peer connects and disconnects
+	multiplayer.peer_connected.connect(_on_peer_connected)
+	multiplayer.peer_disconnected.connect(_on_peer_disconnected)
+	multiplayer.server_disconnected.connect(_on_server_disconnected)
+	multiplayer.connection_failed.connect(_on_connection_failed)
+	
+	# Listen for match lifecycle and host migration
+	OmniManager.match_ended.connect(_on_match_ended)
+	OmniManager.host_migrated.connect(_on_host_migrated)
+	
+	if not multiplayer.has_multiplayer_peer():
+		return
+	
+	_game_started = true
+	
+	if _is_server():
+		spawn_player(1)
+		for p_id in multiplayer.get_peers():
+			spawn_player(p_id)
+	else:
+		# Client signals host only when connected
+		if multiplayer.multiplayer_peer and multiplayer.multiplayer_peer.get_connection_status() == MultiplayerPeer.CONNECTION_CONNECTED:
+			player_loaded.rpc_id(1)
+		else:
+			multiplayer.connected_to_server.connect(func() -> void:
+				player_loaded.rpc_id(1)
+			, CONNECT_ONE_SHOT)
+
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_APPLICATION_RESUMED or what == NOTIFICATION_APPLICATION_FOCUS_IN:
+		_check_connection_health.call_deferred()
+
+
+func _check_connection_health() -> void:
+	if not is_inside_tree() or _is_returning_to_menu:
+		return
+	await get_tree().create_timer(0.3).timeout
+	if not is_inside_tree() or _is_returning_to_menu:
+		return
+	
+	if OmniManager.is_migrating_host:
+		return
+	
+	if OmniManager.current_lobby == null and not _is_server():
+		_return_to_menu()
+
+
+func _physics_process(_delta: float) -> void:
+	if _is_returning_to_menu:
+		return
+
+	if OmniManager.is_migrating_host:
+		label.text = \"Migrating host...\"
+		return
+
+	if not multiplayer.has_multiplayer_peer():
+		return
+
+	# If match was active, no migration is running, and lobby was terminated
+	if _game_started and OmniManager.current_lobby == null and not _is_server():
+		_return_to_menu()
+		return
+
+	# Update ping display (0ms on Host, actual RTT on Clients)
+	var ping: int = OmniManager.get_host_latency_ms()
+	label.text = str(\"Ping: %dms\" % ping) if ping >= 0 else \"Ping: -- ms\"
+
+
+# ==============================================================================
+# SPAWNING & MULTIPLAYER
+# ==============================================================================
+
+@rpc(\"any_peer\", \"call_local\", \"reliable\")
+func player_loaded(custom_position: Vector2 = Vector2.ZERO) -> void:
+	if not _is_server():
+		return
+	var sender_id: int = multiplayer.get_remote_sender_id()
+	spawn_player(sender_id, custom_position)
+
+
+func spawn_player(id: int, custom_position: Vector2 = Vector2.ZERO) -> void:
+	if not _is_server():
+		return
+	if player_container.has_node(str(id)):
+		return
+	
+	# Pick position: custom position (e.g. migration) or spawn marker
+	var pos := custom_position
+	if pos == Vector2.ZERO and player_positions:
+		var spawn_index: int = OmniManager.get_player_slot(id)
+		var spawn_count: int = player_positions.get_child_count()
+		if spawn_count > 0:
+			var spawn_node := player_positions.get_child(spawn_index % spawn_count) as Node2D
+			pos = spawn_node.global_position
+	
+	# MultiplayerSpawner replicates the instantiated player to all peers
+	spawner.spawn({
+		\"id\": id,
+		\"position\": pos
+	})
+
+
+func _custom_spawn_player(data: Dictionary) -> Node:
+	var player: Node2D = player_scene.instantiate()
+	player.name = str(data[\"id\"])
+	player.position = data[\"position\"]
+	return player
+
+
+func _on_peer_connected(id: int) -> void:
+	if _is_server():
+		spawn_player(id)
+
+
+func _on_peer_disconnected(id: int) -> void:
+	# Server despawns players who disconnect during match
+	if _is_server():
+		var player_node := player_container.get_node_or_null(str(id))
+		if player_node:
+			player_node.queue_free()
+
+
+func _on_server_disconnected() -> void:
+	# If host migration is active or lobby exists, start migration watchdog
+	if OmniManager.is_migrating_host or OmniManager.current_lobby != null:
+		_start_migration_watchdog(6.0)
+		return
+	_return_to_menu()
+
+
+func _on_connection_failed() -> void:
+	_return_to_menu()
+
+
+func _on_match_ended(_reason: String = \"\") -> void:
+	_return_to_menu()
+
+
+func _start_migration_watchdog(timeout_sec: float) -> void:
+	_migration_timeout_timer = get_tree().create_timer(timeout_sec)
+	_migration_timeout_timer.timeout.connect(func() -> void:
+		if _is_returning_to_menu:
+			return
+		if OmniManager.is_migrating_host or not multiplayer.has_multiplayer_peer() or multiplayer.multiplayer_peer.get_connection_status() != MultiplayerPeer.CONNECTION_CONNECTED:
+			_return_to_menu()
+	)
+
+
+func _return_to_menu() -> void:
+	if _is_returning_to_menu:
+		return
+	_is_returning_to_menu = true
+	set_physics_process(false)
+	set_process(false)
+	
+	if OmniManager.current_lobby != null or multiplayer.has_multiplayer_peer():
+		OmniManager.leave_match(\"Disconnected from game session.\")
+	
+	get_tree().change_scene_to_file(MENU_SCENE)
+
+
+# ==============================================================================
+# HOST MIGRATION
+# ==============================================================================
+
+func _on_host_migrated(_new_host_puid: String, is_local_host: bool) -> void:
+	_migration_timeout_timer = null
+	
+	# 1. Preserve our current player position from OmniManager (continuous authority snapshot)
+	var my_saved_pos := OmniManager.last_saved_position
+	if my_saved_pos == Vector2.ZERO:
+		var my_old_node = player_container.get_node_or_null(str(OmniManager.last_peer_id))
+		if my_old_node and is_instance_valid(my_old_node) and my_old_node is Node2D:
+			my_saved_pos = my_old_node.global_position
+		else:
+			for child in player_container.get_children():
+				if is_instance_valid(child) and child is CharacterBody2D:
+					my_saved_pos = child.global_position
+					break
+	
+	# 2. Immediately remove all player nodes from the previous server session
+	for child in player_container.get_children():
+		player_container.remove_child(child)
+		child.queue_free()
+	
+	# 3. Spawn at preserved position
+	if is_local_host:
+		# Respawn ourselves as peer 1 (Host) with full authority
+		if my_saved_pos != Vector2.ZERO:
+			spawn_player(1, my_saved_pos)
+		else:
+			spawn_player(1)
+	else:
+		# Tell the new host we are connected and pass our saved position
+		player_loaded.rpc_id(1, my_saved_pos)
+"
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_gssul"]
+size = Vector2(1024, 128)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_b8t8y"]
+size = Vector2(256, 128)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_6ahuv"]
+size = Vector2(128, 256)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_8gxiq"]
+size = Vector2(512, 256)
+
+[sub_resource type="WorldBoundaryShape2D" id="WorldBoundaryShape2D_b8t8y"]
+
+[sub_resource type="FontVariation" id="FontVariation_b8t8y"]
+base_font = ExtResource("3_4y8mc")
+spacing_glyph = 6
+
+[sub_resource type="GDScript" id="GDScript_b8t8y"]
+resource_name = "Joystick"
+script/source = "extends VirtualJoystick
+
+func _ready() -> void:
+	if !OS.has_feature(\"mobile\"):
+		hide()
+"
+
+[sub_resource type="Theme" id="Theme_1ljg5"]
+
+[sub_resource type="GDScript" id="GDScript_qiw3x"]
+resource_name = "ButtonAnimator"
+script/source = "extends TextureButton
+
+const NORMAL_SCALE: Vector2 = Vector2(0.9, 0.9)
+const DOWN_SCALE: Vector2 = Vector2(0.8, 0.8)
+const TWEEN_DURATION: float = 0.35
+
+var tween: Tween
+var is_mouse_inside: bool = false
+var is_pressed_down: bool = false
+var is_mobile: bool = false
+
+const MENU_SCENE = \"uid://blefbnf0t16v6\"
+
+func _ready() -> void:
+	await get_tree().create_timer(0.1).timeout
+	scale = NORMAL_SCALE
+	pivot_offset_ratio = Vector2.ONE/2
+	button_down.connect(func() -> void:
+		_scale_tween(DOWN_SCALE)
+	)
+	button_up.connect(func() -> void:
+		_scale_tween(NORMAL_SCALE)
+	)
+	pressed.connect(func() -> void:
+		_quit_game()
+	)
+
+func _scale_tween(target_scale: Vector2) -> void:
+	if tween: tween.kill()
+	tween = create_tween()
+	tween.tween_property(self, \"scale\", target_scale, TWEEN_DURATION).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_EXPO)
+
+func _quit_game() -> void:
+	OmniManager.leave_match(\"Left Match\")
+	get_tree().change_scene_to_file(MENU_SCENE)
+"
+
+[sub_resource type="FontVariation" id="FontVariation_5medf"]
+base_font = ExtResource("3_4y8mc")
+spacing_glyph = 15
+
+[node name="Game" type="Node2D" unique_id=1569791207]
+script = SubResource("GDScript_pjiy7")
+player_scene = ExtResource("1_b8t8y")
+
+[node name="Background" type="Parallax2D" parent="." unique_id=1193273615]
+scroll_scale = Vector2(0.2, 0)
+repeat_size = Vector2(1280, 720)
+repeat_times = 20
+
+[node name="Sprite" type="Sprite2D" parent="Background" unique_id=799204823]
+texture = ExtResource("1_oqx46")
+centered = false
+
+[node name="PlayerContainer" type="Node2D" parent="." unique_id=824030515]
+
+[node name="PlayerPositions" type="Node2D" parent="." unique_id=684042109]
+
+[node name="1" type="Marker2D" parent="PlayerPositions" unique_id=900799039]
+position = Vector2(256, 384)
+gizmo_extents = 64.0
+
+[node name="2" type="Marker2D" parent="PlayerPositions" unique_id=1189504158]
+position = Vector2(512, 384)
+gizmo_extents = 64.0
+
+[node name="3" type="Marker2D" parent="PlayerPositions" unique_id=322995058]
+position = Vector2(768, 384)
+gizmo_extents = 64.0
+
+[node name="4" type="Marker2D" parent="PlayerPositions" unique_id=56650382]
+position = Vector2(1024, 384)
+gizmo_extents = 64.0
+
+[node name="Platforms" type="Node2D" parent="." unique_id=1275466656]
+
+[node name="Platform1" type="StaticBody2D" parent="Platforms" unique_id=1188630585]
+
+[node name="Collider" type="CollisionShape2D" parent="Platforms/Platform1" unique_id=59743748]
+position = Vector2(640, 576)
+shape = SubResource("RectangleShape2D_gssul")
+
+[node name="Sprite" type="NinePatchRect" parent="Platforms/Platform1" unique_id=679163446]
+offset_left = 128.0
+offset_top = 512.0
+offset_right = 1152.0
+offset_bottom = 640.0
+texture = ExtResource("2_gssul")
+patch_margin_left = 50
+patch_margin_top = 50
+patch_margin_right = 50
+patch_margin_bottom = 50
+
+[node name="Platform2" type="StaticBody2D" parent="Platforms" unique_id=2107555049]
+
+[node name="Collider" type="CollisionShape2D" parent="Platforms/Platform2" unique_id=1931655367]
+position = Vector2(1408, 448)
+shape = SubResource("RectangleShape2D_b8t8y")
+
+[node name="Sprite" type="NinePatchRect" parent="Platforms/Platform2" unique_id=2098144245]
+offset_left = 1280.0
+offset_top = 384.0
+offset_right = 1536.0
+offset_bottom = 512.0
+texture = ExtResource("2_gssul")
+patch_margin_left = 50
+patch_margin_top = 50
+patch_margin_right = 50
+patch_margin_bottom = 50
+
+[node name="Platform3" type="StaticBody2D" parent="Platforms" unique_id=1209033691]
+
+[node name="Collider" type="CollisionShape2D" parent="Platforms/Platform3" unique_id=970994838]
+position = Vector2(1728, 512)
+shape = SubResource("RectangleShape2D_6ahuv")
+
+[node name="Sprite" type="NinePatchRect" parent="Platforms/Platform3" unique_id=1968186112]
+offset_left = 1664.0
+offset_top = 384.0
+offset_right = 1792.0
+offset_bottom = 640.0
+texture = ExtResource("2_gssul")
+patch_margin_left = 50
+patch_margin_top = 50
+patch_margin_right = 50
+patch_margin_bottom = 50
+
+[node name="Platform4" type="StaticBody2D" parent="Platforms" unique_id=900760854]
+
+[node name="Collider" type="CollisionShape2D" parent="Platforms/Platform4" unique_id=1166431454]
+position = Vector2(2176, 384)
+shape = SubResource("RectangleShape2D_8gxiq")
+
+[node name="Sprite" type="NinePatchRect" parent="Platforms/Platform4" unique_id=973190608]
+offset_left = 1920.0
+offset_top = 256.0
+offset_right = 2432.0
+offset_bottom = 512.0
+texture = ExtResource("2_gssul")
+patch_margin_left = 50
+patch_margin_top = 50
+patch_margin_right = 50
+patch_margin_bottom = 50
+
+[node name="Boundary" type="Area2D" parent="Platforms" unique_id=1496102340]
+position = Vector2(0, 1664)
+
+[node name="WorldBoundary" type="CollisionShape2D" parent="Platforms/Boundary" unique_id=1575571921]
+shape = SubResource("WorldBoundaryShape2D_b8t8y")
+
+[node name="UI" type="CanvasLayer" parent="." unique_id=881749664]
+
+[node name="Control" type="Control" parent="UI" unique_id=795025470]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="MarginContainer" type="MarginContainer" parent="UI/Control" unique_id=1573854464]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+theme_override_constants/margin_left = 50
+theme_override_constants/margin_top = 30
+theme_override_constants/margin_right = 50
+theme_override_constants/margin_bottom = 50
+
+[node name="Ping" type="RichTextLabel" parent="UI/Control/MarginContainer" unique_id=1089803991]
+clip_contents = false
+layout_mode = 2
+mouse_filter = 2
+theme_override_colors/font_shadow_color = Color(0, 0, 0, 0.39215687)
+theme_override_constants/shadow_outline_size = 30
+theme_override_constants/shadow_offset_x = 0
+theme_override_constants/shadow_offset_y = 5
+theme_override_constants/outline_size = 30
+theme_override_fonts/normal_font = SubResource("FontVariation_b8t8y")
+theme_override_font_sizes/normal_font_size = 79
+bbcode_enabled = true
+text = "Ping"
+
+[node name="Joystick" type="VirtualJoystick" parent="UI/Control/MarginContainer" unique_id=385094998]
+custom_minimum_size = Vector2(300, 300)
+layout_mode = 2
+size_flags_horizontal = 0
+size_flags_vertical = 8
+joystick_size = 200.0
+tip_size = 120.0
+script = SubResource("GDScript_b8t8y")
+
+[node name="PlayButton" type="TextureButton" parent="UI/Control" unique_id=1410094989]
+layout_mode = 1
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -355.0
+offset_top = 30.0
+offset_right = -30.0
+offset_bottom = 178.0
+grow_horizontal = 0
+theme = SubResource("Theme_1ljg5")
+texture_normal = ExtResource("6_5sgfa")
+texture_disabled = ExtResource("6_5sgfa")
+script = SubResource("GDScript_qiw3x")
+
+[node name="Label" type="RichTextLabel" parent="UI/Control/PlayButton" unique_id=1045511804]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_bottom = -17.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+theme_override_colors/font_shadow_color = Color(0, 0, 0, 0.39215687)
+theme_override_constants/shadow_outline_size = 30
+theme_override_constants/shadow_offset_x = 0
+theme_override_constants/shadow_offset_y = 5
+theme_override_constants/outline_size = 30
+theme_override_fonts/normal_font = SubResource("FontVariation_5medf")
+theme_override_font_sizes/normal_font_size = 79
+bbcode_enabled = true
+text = "[wave]QUIT"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="Spawner" type="MultiplayerSpawner" parent="." unique_id=1316963884]
+spawn_path = NodePath("../PlayerContainer")

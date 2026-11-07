@@ -1,0 +1,14 @@
+OmniSync Multiplayer 
+Godot\Projects\godot-mujoco\demo\OmniSyncMultiplayer
+
+https://reaver-dev.itch.io/omni-sync
+
+https://www.reddit.com/r/godot/comments/1xkxf6n/i_made_a_godot_4_multiplayer_addon_with/
+
+I made my own Test ENV with EOS Keys
+
+you can use it for any testing any game you want
+
+But when you ship a game, its better to use your own EOS ID with your own Epic Games Account
+
+You might need to export game build as exe and then launch the exe for 2nd player, contradicting the Readme.

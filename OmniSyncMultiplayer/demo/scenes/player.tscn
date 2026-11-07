@@ -1,0 +1,307 @@
+[gd_scene format=3 uid="uid://cphcak8bdbhu"]
+
+[ext_resource type="Texture2D" uid="uid://brcup1eykutkb" path="res://OmniSyncMultiplayer/demo/assets/square.png" id="1_adcsf"]
+[ext_resource type="FontFile" uid="uid://h27k01oo0dkj" path="res://OmniSyncMultiplayer/demo/assets/quicksand.ttf" id="2_ndt2f"]
+
+[sub_resource type="GDScript" id="GDScript_g80t1"]
+resource_name = "Player"
+script/source = "extends CharacterBody2D
+
+@export_category(\"Movement\")
+@export var move_speed: float = 1200.0
+@export var acceleration: float = 7.0
+@export var deceleration: float = 6.0
+
+@export var gravity: float = 3600.0
+@export var fall_speed: float = 8000.0
+@export var jump_force: float = 1400.0
+@export var jump_cut_multiplier: float = 0.7
+
+@export_category(\"Forgiveness\")
+@export var jump_buffer_time: float = 0.15
+@export var coyote_time: float = 0.12
+
+@export_category(\"Networking\")
+@export var sync_position: Vector2 = Vector2.ZERO
+
+@onready var buffer_timer: Timer = $Timers/BufferTimer
+@onready var coyote_timer: Timer = $Timers/CoyoteTimer
+@onready var synchronizer: MultiplayerSynchronizer = $Synchronizer
+@onready var world_boundary: Area2D = get_node_or_null(\"../../Platforms/Boundary\") as Area2D
+@onready var player_positions: Node2D = get_node_or_null(\"../../PlayerPositions\") as Node2D
+@onready var animator: AnimationPlayer = $Animators/Animator
+@onready var you: Node2D = $You
+
+enum STATE {
+	FLOOR,
+	FALL,
+	JUMP,
+}
+
+var active_state: STATE = STATE.FALL
+var previous_state: STATE
+var input_direction: float = 0.0
+var is_using_controller: bool = false
+
+func _enter_tree() -> void:
+	var auth_id: int = name.to_int()
+	set_multiplayer_authority(auth_id)
+	if has_node(\"Synchronizer\"):
+		$Synchronizer.set_multiplayer_authority(auth_id)
+
+func _ready() -> void:
+	is_using_controller = !OS.has_feature(\"pc\") or Input.get_connected_joypads().size() > 0
+	sync_position = global_position
+	if is_multiplayer_authority():
+		OmniManager.last_saved_position = global_position
+		# Re-spawn if out of bounds
+		if world_boundary:
+			world_boundary.body_entered.connect(_on_world_boundary_body_entered)
+	else:
+		you.hide()
+	switch_state(STATE.FALL)
+
+func _exit_tree() -> void:
+	if world_boundary and is_instance_valid(world_boundary) and world_boundary.body_entered.is_connected(_on_world_boundary_body_entered):
+		world_boundary.body_entered.disconnect(_on_world_boundary_body_entered)
+
+func _on_world_boundary_body_entered(body: Node2D) -> void:
+	if body != self:
+		return
+	animator.play(\"spawn_anim\")
+	velocity = Vector2.ZERO
+	switch_state(STATE.FALL)
+	if player_positions and player_positions.get_child_count() > 0:
+		var slot: int = OmniManager.get_player_slot(multiplayer.get_unique_id())
+		global_position = player_positions.get_child(slot % player_positions.get_child_count()).global_position
+		sync_position = global_position
+		OmniManager.last_saved_position = global_position
+
+func _unhandled_input(event: InputEvent) -> void:
+	if not is_multiplayer_authority():
+		return
+	if event is InputEventMouseMotion:
+		if event.relative.length_squared() > 16.0:
+			is_using_controller = false
+	elif event is InputEventMouseButton and event.is_pressed():
+		if OS.has_feature(\"pc\"):
+			is_using_controller = false
+	
+func switch_state(to_state: STATE) -> void:
+	previous_state = active_state
+	active_state = to_state
+
+func _physics_process(delta: float) -> void:
+	if not multiplayer.has_multiplayer_peer():
+		return
+	if OmniManager.is_migrating_host:
+		velocity = Vector2.ZERO
+		return
+	if is_multiplayer_authority():
+		process_state(delta)
+		move_and_slide()
+		sync_position = global_position
+		OmniManager.last_saved_position = global_position
+	else:
+		# Smooth interpolation towards network position to eliminate jitter
+		if global_position.distance_squared_to(sync_position) > 400.0 * 400.0:
+			global_position = sync_position
+		else:
+			global_position = global_position.lerp(sync_position, 1.0 - exp(-30.0 * delta))
+
+func process_state(delta: float) -> void:
+	handle_jumping()
+	
+	match active_state:
+		STATE.FALL:
+			handle_movement(delta)
+			handle_falling(delta)
+			if is_on_floor():
+				switch_state(STATE.FLOOR)
+			if coyote_timer.time_left > 0:
+				if Input.is_action_just_pressed(\"ui_accept\") or Input.is_action_just_pressed(\"ui_up\"):
+					jump()
+		STATE.FLOOR:
+			handle_movement(delta)
+			if !is_on_floor():
+				switch_state(STATE.FALL)
+			if buffer_timer.time_left > 0:
+				if Input.is_action_pressed(\"ui_accept\") or Input.is_action_pressed(\"ui_up\"):
+					jump()
+		STATE.JUMP:
+			handle_movement(delta)
+			handle_falling(delta)
+			if (Input.is_action_just_released(\"ui_accept\") or Input.is_action_just_released(\"ui_up\")) and velocity.y < 0:
+				velocity.y *= jump_cut_multiplier
+			if velocity.y >= 0:
+				switch_state(STATE.FALL)
+			
+func handle_movement(delta: float) -> void:
+	input_direction = Input.get_axis(\"ui_left\", \"ui_right\")
+	
+	if input_direction:
+		velocity.x = lerp(velocity.x, move_speed * input_direction, acceleration * delta)
+	else:
+		velocity.x = lerp(velocity.x, 0.0, deceleration * delta)
+	
+func handle_falling(delta: float) -> void:
+	velocity.y = move_toward(velocity.y, fall_speed, gravity * delta)
+
+func handle_jumping() -> void:
+	if Input.is_action_just_pressed(\"ui_accept\") or Input.is_action_just_pressed(\"ui_up\"):
+		buffer_timer.start(jump_buffer_time)
+
+func jump() -> void:
+	coyote_timer.stop()
+	buffer_timer.stop()
+	switch_state(STATE.JUMP)
+	velocity.y = -jump_force
+"
+
+[sub_resource type="GDScript" id="GDScript_6ahuv"]
+resource_name = "Camera"
+script/source = "extends Camera2D
+
+@onready var player := $\"..\"
+
+func _init() -> void:
+	process_callback = Camera2D.CAMERA2D_PROCESS_PHYSICS
+
+func _ready() -> void:
+	if not is_instance_valid(player):
+		queue_free()
+		return
+	
+	var auth_id: int = player.name.to_int()
+	if auth_id > 0:
+		set_multiplayer_authority(auth_id)
+	
+	if multiplayer.has_multiplayer_peer() and not is_multiplayer_authority():
+		enabled = false
+		set_physics_process(false)
+		queue_free()
+		return
+	
+	enabled = true
+	global_position = player.global_position
+	name = \"Camera\" + player.name
+	player.tree_exiting.connect(queue_free)
+	reparent.call_deferred(player.get_parent())
+
+func _physics_process(_delta: float) -> void:
+	if not is_instance_valid(player):
+		queue_free()
+		return
+	global_position = player.global_position
+"
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_adcsf"]
+radius = 60.00833
+
+[sub_resource type="Animation" id="Animation_ndt2f"]
+length = 0.001
+tracks/0/type = "value"
+tracks/0/imported = false
+tracks/0/enabled = true
+tracks/0/path = NodePath("Sprite:visible")
+tracks/0/interp = 1
+tracks/0/loop_wrap = true
+tracks/0/keys = {
+"times": PackedFloat32Array(0),
+"transitions": PackedFloat32Array(1),
+"update": 1,
+"values": [true]
+}
+
+[sub_resource type="Animation" id="Animation_adcsf"]
+resource_name = "spawn_anim"
+length = 0.9
+step = 0.1
+tracks/0/type = "value"
+tracks/0/imported = false
+tracks/0/enabled = true
+tracks/0/path = NodePath("Sprite:visible")
+tracks/0/interp = 1
+tracks/0/loop_wrap = true
+tracks/0/keys = {
+"times": PackedFloat32Array(0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.70000005, 0.8, 0.90000004),
+"transitions": PackedFloat32Array(1, 1, 1, 1, 1, 1, 1, 1, 1, 1),
+"update": 1,
+"values": [false, true, false, true, false, true, false, true, false, true]
+}
+
+[sub_resource type="AnimationLibrary" id="AnimationLibrary_ndt2f"]
+_data = {
+&"RESET": SubResource("Animation_ndt2f"),
+&"spawn_anim": SubResource("Animation_adcsf")
+}
+
+[sub_resource type="SceneReplicationConfig" id="SceneReplicationConfig_g80t1"]
+properties/0/path = NodePath(".:sync_position")
+properties/0/spawn = true
+properties/0/replication_mode = 1
+properties/1/path = NodePath(".:position")
+properties/1/spawn = true
+properties/1/replication_mode = 1
+properties/2/path = NodePath("Animators/Animator:current_animation")
+properties/2/spawn = true
+properties/2/replication_mode = 1
+properties/3/path = NodePath("Sprite:visible")
+properties/3/spawn = true
+properties/3/replication_mode = 1
+
+[sub_resource type="FontVariation" id="FontVariation_m7rvx"]
+base_font = ExtResource("2_ndt2f")
+spacing_glyph = 6
+
+[node name="Player" type="CharacterBody2D" unique_id=1179683118]
+script = SubResource("GDScript_g80t1")
+
+[node name="Camera" type="Camera2D" parent="." unique_id=1985217726]
+position_smoothing_enabled = true
+script = SubResource("GDScript_6ahuv")
+
+[node name="Collider" type="CollisionShape2D" parent="." unique_id=625286781]
+shape = SubResource("CircleShape2D_adcsf")
+
+[node name="Sprite" type="Sprite2D" parent="." unique_id=1691674852]
+texture = ExtResource("1_adcsf")
+
+[node name="Timers" type="Node" parent="." unique_id=2014563124]
+
+[node name="BufferTimer" type="Timer" parent="Timers" unique_id=571222475]
+
+[node name="CoyoteTimer" type="Timer" parent="Timers" unique_id=519379938]
+
+[node name="Animators" type="Node" parent="." unique_id=602645070]
+
+[node name="Animator" type="AnimationPlayer" parent="Animators" unique_id=1799610255]
+root_node = NodePath("../..")
+libraries/ = SubResource("AnimationLibrary_ndt2f")
+
+[node name="Synchronizer" type="MultiplayerSynchronizer" parent="." unique_id=129010466]
+replication_config = SubResource("SceneReplicationConfig_g80t1")
+
+[node name="You" type="Node2D" parent="." unique_id=1649594108]
+position = Vector2(0, -107)
+
+[node name="Timer" type="RichTextLabel" parent="You" unique_id=511616394]
+clip_contents = false
+offset_left = -100.0
+offset_top = -39.0
+offset_right = 100.0
+offset_bottom = 61.0
+mouse_filter = 2
+theme_override_colors/default_color = Color(0.101960786, 0.101960786, 0.101960786, 1)
+theme_override_colors/font_outline_color = Color(1, 1, 1, 1)
+theme_override_colors/font_shadow_color = Color(0, 0, 0, 0.39215687)
+theme_override_constants/shadow_outline_size = 15
+theme_override_constants/shadow_offset_x = 0
+theme_override_constants/shadow_offset_y = 0
+theme_override_constants/outline_size = 15
+theme_override_fonts/normal_font = SubResource("FontVariation_m7rvx")
+theme_override_font_sizes/normal_font_size = 48
+bbcode_enabled = true
+text = "You"
+horizontal_alignment = 1
+vertical_alignment = 1

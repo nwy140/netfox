@@ -1,0 +1,42 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/g1_multiplayer_lobby.gd" id="1"]
+
+[node name="G1MultiplayerLobby" type="CenterContainer"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+script = ExtResource("1")
+
+[node name="Options" type="VBoxContainer" parent="."]
+custom_minimum_size = Vector2(400, 0)
+
+[node name="Title" type="Label" parent="Options"]
+theme_override_font_sizes/font_size = 28
+text = "UNITREE G1 MULTIPLAYER"
+
+[node name="Status" type="Label" parent="Options"]
+autowrap_mode = 2
+
+[node name="Transport" type="OptionButton" parent="Options"]
+
+[node name="Address" type="LineEdit" parent="Options"]
+text = "127.0.0.1"
+placeholder_text = "Host IP address"
+
+[node name="Port" type="SpinBox" parent="Options"]
+min_value = 1024.0
+max_value = 65535.0
+value = 29475.0
+suffix = "UDP port"
+
+[node name="RelayMode" type="OptionButton" parent="Options"]
+
+[node name="Play" type="Button" parent="Options"]
+text = "Join an existing G1 match"
+
+[node name="Host" type="Button" parent="Options"]
+text = "Host a G1 match"
+
+[node name="Back" type="Button" parent="Options"]
+text = "Back to 2D lobby"

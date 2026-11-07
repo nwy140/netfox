@@ -1,0 +1,18 @@
+<mujoco model="drop_lab">
+  <option timestep="0.004166666666666667" integrator="implicitfast"/>
+  <worldbody>
+    <geom name="floor" type="plane" size="8 8 0.1"/>
+    <body name="crate" pos="-0.8 0 2.7" euler="20 15 10">
+      <freejoint/>
+      <geom type="box" size="0.4 0.4 0.4"/>
+    </body>
+    <body name="ball" pos="0.45 0 4">
+      <freejoint/>
+      <geom type="sphere" size="0.38"/>
+    </body>
+    <body name="block" pos="1 0.45 1.6" euler="10 30 15">
+      <freejoint/>
+      <geom type="box" size="0.35 0.5 0.28"/>
+    </body>
+  </worldbody>
+</mujoco>
