@@ -1,5 +1,5 @@
 extends BaseNetInput
-class_name PlayerInput
+class_name RocketLeaguePlayerInput
 
 
 var ai_enabled: bool = false

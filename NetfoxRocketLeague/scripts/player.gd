@@ -26,7 +26,7 @@ class_name Player
 
 var gravity = ProjectSettings.get_setting("physics/3d/default_gravity")
 
-@onready var inputs: PlayerInput = $Input
+@onready var inputs: RocketLeaguePlayerInput = $Input
 @onready var rollback_synchronizer: RollbackSynchronizer = $RollbackSynchronizer
 #@onready var physics: RapierDriver = get_node(^"../../RapierDriver")
 

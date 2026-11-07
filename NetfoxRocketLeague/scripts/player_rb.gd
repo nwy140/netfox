@@ -27,7 +27,7 @@ var team : int = 0 :
 
 var team_colors = [Color.RED, Color.BLUE]
 
-@onready var inputs: PlayerInput = $Input
+@onready var inputs: RocketLeaguePlayerInput = $Input
 @onready var rollback_synchronizer: RollbackSynchronizer = $RollbackSynchronizer
 @onready var car_model: Node3D = $Car_model
 @onready var roof_bounce: RayCast3D = $RoofBounce

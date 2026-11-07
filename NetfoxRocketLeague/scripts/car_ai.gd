@@ -1,6 +1,6 @@
 extends Node3D
 
-@onready var inputs: PlayerInput = get_parent().get_node("Input")
+@onready var inputs: RocketLeaguePlayerInput = get_parent().get_node("Input")
 @onready var ball: Node3D = get_tree().get_root().get_node("World/Ball")
 
 # Turning circle compensation

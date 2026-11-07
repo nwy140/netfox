@@ -39,11 +39,11 @@ func _export_begin(features: PackedStringArray, is_debug: bool, path: String, fl
 		push_warning("EOS Android Export: .env file not found! EOS credentials will not be available.")
 		push_warning("Create res://.env with your EOS credentials for the app to work.")
 	
-	configure_android()
+	configure_android(true)
 
 ## Configures the Android build template files for EOS.
 ## Can be called directly on plugin activation or during export.
-func configure_android() -> void:
+func configure_android(report_missing_template: bool = false) -> void:
 	if not ProjectSettings.get_setting("eos_android/enable_auto_config", true):
 		print("EOS Android Export: Auto-configuration disabled")
 		return
@@ -56,8 +56,9 @@ func configure_android() -> void:
 	
 	# Check if Android build template exists
 	if not DirAccess.dir_exists_absolute("res://android/build"):
-		push_error("EOS Android Export: Android build template not found")
-		push_error("Please install Android build template: Project -> Install Android Build Template")
+		if report_missing_template:
+			push_error("EOS Android Export: Android build template not found")
+			push_error("Please install Android build template: Project -> Install Android Build Template")
 		return
 	
 	print("EOS Android Export: Configuring Android build for EOS...")
