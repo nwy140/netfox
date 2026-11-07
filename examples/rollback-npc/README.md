@@ -8,4 +8,3 @@ input ) can be built the same way as e.g. player nodes.
 
 To edit and/or run, open the Godot project in the repository root, and open the
 scene in this directory.
-
